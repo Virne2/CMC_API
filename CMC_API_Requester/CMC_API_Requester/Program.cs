@@ -33,6 +33,8 @@ namespace CMC_API_Requester
             while (true)
             {
                 //Execute the update method of the instantiated class every 5 seconds
+                //5 seconds was chosen as each time the console display is updated, it flickers slightly due to clearing and rewriting the whole display.
+                //5 seconds allows the current time and time till next update to be shown in close to real time while also minimizing flickering
                 mCrypto.Update();
                 Thread.Sleep(5000);
             }

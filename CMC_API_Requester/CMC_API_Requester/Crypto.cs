@@ -8,6 +8,7 @@ using static System.Console;
 using System.Diagnostics;
 using System.Web;
 using Newtonsoft.Json.Linq;
+using System.Linq;
 
 namespace CMC_API_Requester
 {
@@ -50,6 +51,9 @@ namespace CMC_API_Requester
         //deep cloned to PreviousData and the new data will be placed into CurrentData
         public Dictionary<string, JObject> CurrentData;
         public Dictionary<string, JObject> PreviousData;
+
+        //Lists to help sort the CurrentData dictionary by cmc_rank
+        private List<KeyValuePair<string, int>> coinRankList = new List<KeyValuePair<string, int>>();
 
         //List of coins that are requested from the txt file on my computer
         public List<string> CoinsToBeRequested;
@@ -306,7 +310,13 @@ namespace CMC_API_Requester
                     CurrentData[(string)CallDataDict["QuotesJsonDataBTC"]["data"][CoinsToBeRequested[i]]["slug"]] = JData; //Set compiled data into the dictionary
                 }
             }
-            //We successfully grabbed the data
+            //We successfully grabbed the data, now order the data according to coin ranks. Sort both dictionaries
+            coinRankList = new List<KeyValuePair<string, int>>();
+            foreach(KeyValuePair<string,JObject> entry in CurrentData)
+            {
+                coinRankList.Add(new KeyValuePair<string, int>(entry.Key, (int)entry.Value["cmc_rank"]));
+            }
+            QuickSortStringInt(coinRankList, 0, coinRankList.Count-1);
             return true;
         }
 
@@ -437,8 +447,9 @@ namespace CMC_API_Requester
                 //Clear the previous cached strings for the table, we will write the new ones so that the values do not need to be calculated every 5 seconds
                 PreviousDisplayStrings.Clear();
                 //For each coin in our CurrentData dictionary, display a line in the table for the data on this coin
-                foreach (KeyValuePair<string, JObject> entry in CurrentData)
+                foreach (KeyValuePair<string, int> entry in coinRankList)
                 {
+                    JObject coinData = CurrentData[entry.Key];
                     //Check if we have previous data on this coin to make comparisons to
                     bool PreviousDataExists = PreviousData.ContainsKey(entry.Key);
                     //Set a temporary colour to be used throughout this line
@@ -446,38 +457,38 @@ namespace CMC_API_Requester
                     //Create a ColourString array to place the generated ColourStrings into
                     ColourString[] CoinColourStrings = new ColourString[10];
                     //If we specifically requested this coin to be quoted, make it's rank, name and symbol cyan coloured
-                    if (CoinsToBeRequested.Contains((string)entry.Value["symbol"]))
+                    if (CoinsToBeRequested.Contains((string)coinData["symbol"]))
                     {
                         tempColor = CYAN;
                     }
                     //ColourStrings for rank, name and symbol
-                    CoinColourStrings[0] = new ColourString((string)entry.Value["cmc_rank"], ColumnWidths[0], tempColor, true);
-                    CoinColourStrings[1] = new ColourString((string)entry.Value["name"], ColumnWidths[1], tempColor, true);
-                    CoinColourStrings[2] = new ColourString((string)entry.Value["symbol"], ColumnWidths[2], tempColor, true);
+                    CoinColourStrings[0] = new ColourString((string)coinData["cmc_rank"], ColumnWidths[0], tempColor, true);
+                    CoinColourStrings[1] = new ColourString((string)coinData["name"], ColumnWidths[1], tempColor, true);
+                    CoinColourStrings[2] = new ColourString((string)coinData["symbol"], ColumnWidths[2], tempColor, true);
 
                     //Check if price in currencies is higher than previous data and set colour accordingly
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)entry.Value["quote"]["BTC"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["BTC"]["price"]) : WHITE;
-                    CoinColourStrings[3] = new ColourString((Math.Round((decimal)entry.Value["quote"]["BTC"]["price"], 9)).ToString(), ColumnWidths[3], tempColor, true);
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["BTC"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["BTC"]["price"]) : WHITE;
+                    CoinColourStrings[3] = new ColourString((Math.Round((decimal)coinData["quote"]["BTC"]["price"], 9)).ToString(), ColumnWidths[3], tempColor, true);
 
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)entry.Value["quote"]["AUD"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["AUD"]["price"]) : WHITE;
-                    CoinColourStrings[4] = new ColourString("$" + (Math.Round((decimal)entry.Value["quote"]["AUD"]["price"], 2)).ToString(), ColumnWidths[4], tempColor, true);
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["AUD"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["AUD"]["price"]) : WHITE;
+                    CoinColourStrings[4] = new ColourString("$" + (Math.Round((decimal)coinData["quote"]["AUD"]["price"], 2)).ToString(), ColumnWidths[4], tempColor, true);
 
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)entry.Value["quote"]["USD"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["USD"]["price"]) : WHITE;
-                    CoinColourStrings[5] = new ColourString("$" + (Math.Round((decimal)entry.Value["quote"]["USD"]["price"], 2)).ToString(), ColumnWidths[5], tempColor, true);
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["USD"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["USD"]["price"]) : WHITE;
+                    CoinColourStrings[5] = new ColourString("$" + (Math.Round((decimal)coinData["quote"]["USD"]["price"], 2)).ToString(), ColumnWidths[5], tempColor, true);
 
                     //Check if percent changes over time are positive or negative and set colour accordingly
-                    tempColor = GetConsoleColorPercentages((decimal)entry.Value["quote"]["USD"]["percent_change_1h"]);
-                    CoinColourStrings[6] = new ColourString(Math.Round((decimal)entry.Value["quote"]["USD"]["percent_change_1h"], 2) + "%", ColumnWidths[6], tempColor, false);
+                    tempColor = GetConsoleColorPercentages((decimal)coinData["quote"]["USD"]["percent_change_1h"]);
+                    CoinColourStrings[6] = new ColourString(Math.Round((decimal)coinData["quote"]["USD"]["percent_change_1h"], 2) + "%", ColumnWidths[6], tempColor, false);
 
-                    tempColor = GetConsoleColorPercentages((decimal)entry.Value["quote"]["USD"]["percent_change_24h"]);
-                    CoinColourStrings[7] = new ColourString(Math.Round((decimal)entry.Value["quote"]["USD"]["percent_change_24h"], 2) + "%", ColumnWidths[7], tempColor, false);
+                    tempColor = GetConsoleColorPercentages((decimal)coinData["quote"]["USD"]["percent_change_24h"]);
+                    CoinColourStrings[7] = new ColourString(Math.Round((decimal)coinData["quote"]["USD"]["percent_change_24h"], 2) + "%", ColumnWidths[7], tempColor, false);
 
-                    tempColor = GetConsoleColorPercentages((decimal)entry.Value["quote"]["USD"]["percent_change_7d"]);
-                    CoinColourStrings[8] = new ColourString(Math.Round((decimal)entry.Value["quote"]["USD"]["percent_change_7d"], 2) + "%", ColumnWidths[8], tempColor, false);
+                    tempColor = GetConsoleColorPercentages((decimal)coinData["quote"]["USD"]["percent_change_7d"]);
+                    CoinColourStrings[8] = new ColourString(Math.Round((decimal)coinData["quote"]["USD"]["percent_change_7d"], 2) + "%", ColumnWidths[8], tempColor, false);
 
                     //Check if market cap in USD is higher than previous data and set colour accordingly
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)entry.Value["quote"]["USD"]["market_cap"] - (decimal)PreviousData[entry.Key]["quote"]["USD"]["market_cap"]) : WHITE;
-                    CoinColourStrings[9] = new ColourString("$" + string.Format("{0:n}", Math.Round((decimal)entry.Value["quote"]["USD"]["market_cap"], 0)), ColumnWidths[9], tempColor, false);
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["USD"]["market_cap"] - (decimal)PreviousData[entry.Key]["quote"]["USD"]["market_cap"]) : WHITE;
+                    CoinColourStrings[9] = new ColourString("$" + string.Format("{0:n}", Math.Round((decimal)coinData["quote"]["USD"]["market_cap"], 0)), ColumnWidths[9], tempColor, false);
 
                     //Cache this line
                     PreviousDisplayStrings.Add(CoinColourStrings);
@@ -589,6 +600,67 @@ namespace CMC_API_Requester
             }
             return input.Length <= maxLength ? input : input.Substring(0, maxLength);
         }
+
+        /// <summary>
+        /// Standard quick sort implementation on the KeyValuePair(string,int) list used to sort CurrentData by coin rank
+        /// </summary>
+        /// <param name="list">The list to be sorted</param>
+        /// <param name="left">The left index of where to start in the list</param>
+        /// <param name="right">The right index of where to end in the list</param>
+        public static void QuickSortStringInt(List<KeyValuePair<string,int>> list, int left, int right)
+        {
+            if(left < right)
+            {
+                int pivot = Partition(list, left, right);
+                if(pivot > 1)
+                {
+                    QuickSortStringInt(list, left, pivot - 1);
+                }
+                if (pivot + 1 < right)
+                {
+                    QuickSortStringInt(list, pivot + 1, right);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Standard partition implementation for quick sorting
+        /// </summary>
+        /// <param name="list">The list to be sorted</param>
+        /// <param name="left">The left index of where to start in the list</param>
+        /// <param name="right">The right index of where to end in the list</param>
+        /// <returns>The int of where to partition the list</returns>
+        public static int Partition(List<KeyValuePair<string,int>> inputList, int left, int right)
+        {
+            int pivot = inputList[left].Value;
+            while (true)
+            {
+                while(inputList[left].Value < pivot)
+                {
+                    left++;
+                }
+                while(inputList[right].Value > pivot)
+                {
+                    right--;
+                }
+
+                if(left < right)
+                {
+                    if(inputList[left].Value == inputList[right].Value)
+                    {
+                        return right;
+                    }
+                    KeyValuePair<string, int> temp = inputList[left];
+                    inputList[left] = inputList[right];
+                    inputList[right] = temp;
+                }
+                else
+                {
+                    return right;
+                }
+            }
+        }
+
     }
 }
 
