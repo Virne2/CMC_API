@@ -291,6 +291,8 @@ namespace CMC_API_Requester
             //No errors in the retrieved data, clone the old data into PreviousData
             PreviousData = Program.CloneDictionaryCloningValues(CurrentData);
             //For each coin in the listings data, compile it into a JObject and save it into the CurrentData dictionary as <coin name, JSON data>
+            //First, clear the CurrentData dictionary
+            CurrentData.Clear();
             for (int i = 0; i < ListingsRequestLimit; i++)
             {
                 JObject JData = (JObject)CallDataDict["ListingJsonDataBTC"]["data"][i]; //Grab data for this coin from BTC conversion
