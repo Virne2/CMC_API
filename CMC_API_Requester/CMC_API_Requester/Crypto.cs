@@ -53,7 +53,8 @@ namespace CMC_API_Requester
         public Dictionary<string, JObject> PreviousData;
 
         //Lists to help sort the CurrentData dictionary by cmc_rank
-        private List<KeyValuePair<string, int>> coinRankList = new List<KeyValuePair<string, int>>();
+        //private List<KeyValuePair<string, int>> coinRankList = new List<KeyValuePair<string, int>>();
+        public SortedDictionary<int, string> sortDict;
 
         //List of coins that are requested from the txt file on my computer
         public List<string> CoinsToBeRequested;
@@ -62,7 +63,7 @@ namespace CMC_API_Requester
         public static string[] ColumnTitles = { "Rank", "Name", "Symbol", "Price BTC", "Price AUD", "Price USD", "Change 1HR", "Change 24HR", "Change 7D", "Market Cap USD" };
         public static int[] ColumnWidths = { 5, 18, 9, 14, 14, 14, 14, 14, 14, 23 };
         public static bool[] ColumnAligning = { true, true, true, true, true, true, false, false, false, false };
-        private ColourString[] ColumnTitlesStrings;
+        private readonly ColourString[] ColumnTitlesStrings;
 
         //When new data is displayed, cache the displayed strings so they do not need to be recalculated
         private List<ColourString[]> PreviousDisplayStrings;
@@ -216,15 +217,16 @@ namespace CMC_API_Requester
         public bool GetAPIData()
         {
             //Initialize a dictionary for temporarily storing the new data
-            Dictionary<string, JObject> CallDataDict = new Dictionary<string, JObject>();
-
-            //Set keys for dictionary, one key per converted currency for both top listings and specific quotes
-            CallDataDict["ListingJsonDataBTC"] = new JObject();
-            CallDataDict["ListingJsonDataUSD"] = new JObject();
-            CallDataDict["ListingJsonDataAUD"] = new JObject();
-            CallDataDict["QuotesJsonDataBTC"] = new JObject();
-            CallDataDict["QuotesJsonDataUSD"] = new JObject();
-            CallDataDict["QuotesJsonDataAUD"] = new JObject();
+            Dictionary<string, JObject> CallDataDict = new Dictionary<string, JObject>
+            {
+                //Set keys for dictionary, one key per converted currency for both top listings and specific quotes
+                ["ListingJsonDataBTC"] = new JObject(),
+                ["ListingJsonDataUSD"] = new JObject(),
+                ["ListingJsonDataAUD"] = new JObject(),
+                ["QuotesJsonDataBTC"] = new JObject(),
+                ["QuotesJsonDataUSD"] = new JObject(),
+                ["QuotesJsonDataAUD"] = new JObject()
+            };
 
             //Start a loop trying to grab data. If we fail too many times just give up on getting data and try again in 30 minutes
             bool GettingData = true;
@@ -313,12 +315,19 @@ namespace CMC_API_Requester
                 }
             }
             //We successfully grabbed the data, now order the data according to coin ranks. Sort both dictionaries
+            sortDict = new SortedDictionary<int, string>();
+            foreach(KeyValuePair<string, JObject> entry in CurrentData)
+            {
+                sortDict.Add((int)entry.Value["cmc_rank"], entry.Key);
+            }
+            /* Should be replaced by above code, keeping just incase.
             coinRankList = new List<KeyValuePair<string, int>>();
             foreach(KeyValuePair<string,JObject> entry in CurrentData)
             {
                 coinRankList.Add(new KeyValuePair<string, int>(entry.Key, (int)entry.Value["cmc_rank"]));
             }
             QuickSortStringInt(coinRankList, 0, coinRankList.Count-1);
+            */
             return true;
         }
 
@@ -449,11 +458,11 @@ namespace CMC_API_Requester
                 //Clear the previous cached strings for the table, we will write the new ones so that the values do not need to be calculated every 5 seconds
                 PreviousDisplayStrings.Clear();
                 //For each coin in our CurrentData dictionary, display a line in the table for the data on this coin
-                foreach (KeyValuePair<string, int> entry in coinRankList)
+                foreach(KeyValuePair<int, string> entry in sortDict)
                 {
-                    JObject coinData = CurrentData[entry.Key];
+                    JObject coinData = CurrentData[entry.Value];
                     //Check if we have previous data on this coin to make comparisons to
-                    bool PreviousDataExists = PreviousData.ContainsKey(entry.Key);
+                    bool PreviousDataExists = PreviousData.ContainsKey(entry.Value);
                     //Set a temporary colour to be used throughout this line
                     ConsoleColor tempColor = WHITE;
                     //Create a ColourString array to place the generated ColourStrings into
@@ -469,13 +478,13 @@ namespace CMC_API_Requester
                     CoinColourStrings[2] = new ColourString((string)coinData["symbol"], ColumnWidths[2], tempColor, true);
 
                     //Check if price in currencies is higher than previous data and set colour accordingly
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["BTC"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["BTC"]["price"]) : WHITE;
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["BTC"]["price"] / (decimal)PreviousData[entry.Value]["quote"]["BTC"]["price"]) : WHITE;
                     CoinColourStrings[3] = new ColourString((Math.Round((decimal)coinData["quote"]["BTC"]["price"], 9)).ToString(), ColumnWidths[3], tempColor, true);
 
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["AUD"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["AUD"]["price"]) : WHITE;
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["AUD"]["price"] / (decimal)PreviousData[entry.Value]["quote"]["AUD"]["price"]) : WHITE;
                     CoinColourStrings[4] = new ColourString("$" + (Math.Round((decimal)coinData["quote"]["AUD"]["price"], 2)).ToString(), ColumnWidths[4], tempColor, true);
 
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["USD"]["price"] / (decimal)PreviousData[entry.Key]["quote"]["USD"]["price"]) : WHITE;
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["USD"]["price"] / (decimal)PreviousData[entry.Value]["quote"]["USD"]["price"]) : WHITE;
                     CoinColourStrings[5] = new ColourString("$" + (Math.Round((decimal)coinData["quote"]["USD"]["price"], 2)).ToString(), ColumnWidths[5], tempColor, true);
 
                     //Check if percent changes over time are positive or negative and set colour accordingly
@@ -489,7 +498,7 @@ namespace CMC_API_Requester
                     CoinColourStrings[8] = new ColourString(Math.Round((decimal)coinData["quote"]["USD"]["percent_change_7d"], 2) + "%", ColumnWidths[8], tempColor, false);
 
                     //Check if market cap in USD is higher than previous data and set colour accordingly
-                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["USD"]["market_cap"] - (decimal)PreviousData[entry.Key]["quote"]["USD"]["market_cap"]) : WHITE;
+                    tempColor = PreviousDataExists ? GetConsoleColorRatio((decimal)coinData["quote"]["USD"]["market_cap"] - (decimal)PreviousData[entry.Value]["quote"]["USD"]["market_cap"]) : WHITE;
                     CoinColourStrings[9] = new ColourString("$" + string.Format("{0:n}", Math.Round((decimal)coinData["quote"]["USD"]["market_cap"], 0)), ColumnWidths[9], tempColor, false);
 
                     //Cache this line
